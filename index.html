@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi biblioteca</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Karla:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: una repisa horizontal con scroll; lomos 3D parados; al tocar, la tapa real grande. */
+:root{
+  --paper:#ece3d4; --paper-2:#e3d8c4; --wall:#1c1712; --wood:#6b4a2f; --wood-2:#432b16;
+  --ink:#2b241b; --ink-soft:#6a5d49; --accent:#9c5a3c; --line:rgba(43,36,27,.16);
+  --card:#f6f0e4;
+  --d-serif:"Cormorant Garamond",Georgia,serif;
+  --d-sans:"Karla",system-ui,-apple-system,sans-serif;
+  --d-mono:"Space Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#17140f; --paper-2:#1e1a14; --wall:#0c0a07; --wood:#5a3f29; --wood-2:#2c1c10;
+  --ink:#ece3d4; --ink-soft:#a99a82; --accent:#d08a5f; --line:rgba(236,227,212,.14);
+  --card:#211c15; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --paper:#17140f; --paper-2:#1e1a14; --wall:#0c0a07; --wood:#5a3f29; --wood-2:#2c1c10;
+  --ink:#ece3d4; --ink-soft:#a99a82; --accent:#d08a5f; --line:rgba(236,227,212,.14);
+  --card:#211c15; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:
+    radial-gradient(120% 80% at 50% -10%, var(--paper-2), var(--paper) 60%);
+  color:var(--ink); font-family:var(--d-sans); font-weight:400;
+  min-height:100%;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0;
+}
+.wrap{max-width:1100px;margin:0 auto}
+header{padding-block:clamp(28px,6vw,54px) 10px;text-align:center}
+.eyebrow{font-family:var(--d-mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft)}
+h1{font-family:var(--d-serif);font-weight:500;font-style:italic;
+  font-size:clamp(34px,8vw,62px);line-height:1.05;margin:.18em 0 .1em;text-wrap:balance;letter-spacing:.01em}
+h1 .caret{display:inline-block;width:.04em;margin-left:.02em;background:var(--accent);
+  animation:blink 1.1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.count{font-family:var(--d-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-soft)}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:center;margin:16px 0 6px}
+.pill{font-family:var(--d-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink-soft);
+  cursor:pointer;transition:.18s}
+.pill[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.spacer{flex:1 1 20px;min-width:0}
+.ghost{border-style:dashed}
+
+/* Repisa */
+.shelf-outer{margin:18px 0 40px;position:relative}
+.shelf{display:flex;align-items:flex-end;gap:2px;overflow-x:auto;overflow-y:hidden;
+  padding:46px 8px 0;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.shelf::-webkit-scrollbar{height:8px}
+.shelf::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+.board{height:12px;border-radius:2px;margin:0 2px 2px;
+  background:linear-gradient(var(--wood),var(--wood-2));
+  box-shadow:0 6px 10px -4px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,255,255,.14)}
+
+.book{all:unset;position:relative;cursor:pointer;display:block;flex:0 0 auto;
+  width:var(--sw);height:var(--sh);transition:transform .22s ease, filter .22s ease}
+.book:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+@media(hover:hover){.book:hover{transform:translateY(-10px);z-index:5;filter:brightness(1.04)}}
+.spine{position:absolute;inset:0;border-radius:2px 3px 3px 2px;overflow:hidden;
+  background:var(--spine,#5b5146);
+  box-shadow:0 10px 14px -8px rgba(0,0,0,.55), inset -2px 0 4px rgba(0,0,0,.35), inset 2px 0 2px rgba(255,255,255,.1)}
+.strip{position:absolute;inset:0 auto 0 0;width:30%;background-size:cover;background-position:left center;
+  filter:brightness(.92);box-shadow:inset -3px 0 5px rgba(0,0,0,.35)}
+.sheen{position:absolute;inset:0;background:linear-gradient(90deg,
+  rgba(255,255,255,.22),rgba(255,255,255,.03) 18%,rgba(0,0,0,.05) 80%,rgba(0,0,0,.34))}
+.band{position:absolute;left:34%;right:7%;height:2px;background:var(--accent,rgba(255,255,255,.3));opacity:.9}
+.band.t{top:10px}.band.b{bottom:12px}
+.vtext{position:absolute;left:34%;right:0;top:16px;bottom:16px;display:flex;align-items:center;justify-content:center;gap:10px}
+.vt-title{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--d-serif);font-weight:600;
+  font-size:clamp(11px,calc(var(--sw)*.30),15px);line-height:1;color:var(--ink-on,#f4efe6);
+  white-space:nowrap;max-height:100%;overflow:hidden;text-overflow:ellipsis;letter-spacing:.01em}
+.vt-author{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--d-mono);
+  font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-on,#f4efe6);opacity:.66;
+  white-space:nowrap;max-height:60%;overflow:hidden;text-overflow:ellipsis}
+
+/* Libro de frente (tapa) */
+.book.face{width:var(--fw)}
+.book.face .spine{background:var(--spine,#30405a)}
+.face-img{position:absolute;inset:0;background-size:cover;background-position:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.2), 0 10px 16px -8px rgba(0,0,0,.6)}
+.pages{position:absolute;right:-3px;top:3px;bottom:0;width:3px;border-radius:0 2px 2px 0;
+  background:repeating-linear-gradient(90deg,#efe7d6,#efe7d6 1px,#cdbfa6 1px,#d8cdb6 2px)}
+
+/* decoración: plantita al final */
+.plant{flex:0 0 auto;width:40px;height:var(--sh);position:relative;align-self:flex-end}
+.pot{position:absolute;left:6px;right:6px;bottom:0;height:34px;border-radius:3px 3px 5px 5px;
+  background:linear-gradient(#c9825a,#a9623c)}
+.leaf{position:absolute;bottom:28px;width:12px;height:30px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;
+  background:#5f8a5e}
+.leaf.l{left:4px;transform:rotate(-26deg);background:#4e7a52}
+.leaf.r{right:4px;transform:rotate(26deg);background:#6b9e6f}
+.leaf.c{left:14px;bottom:34px;height:34px}
+
+/* Overlay de detalle */
+.overlay{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;
+  padding:24px;background:rgba(8,6,4,.62);backdrop-filter:blur(8px)}
+.overlay[aria-hidden="false"]{display:flex}
+.detail{display:flex;gap:22px;max-width:620px;width:100%;align-items:center;
+  animation:rise .45s cubic-bezier(.16,1,.3,1)}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.detail .cov{flex:0 0 auto;width:min(44vw,210px);aspect-ratio:2/3;border-radius:4px;background:#30405a;
+  background-size:cover;background-position:center;box-shadow:0 24px 48px -16px rgba(0,0,0,.7)}
+.detail .meta{min-width:0;color:#f3ece0}
+.detail .meta .g{font-family:var(--d-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#c9b79c}
+.detail .meta h2{font-family:var(--d-serif);font-weight:500;font-size:clamp(24px,5vw,38px);line-height:1.1;margin:.2em 0 .1em;text-wrap:balance}
+.detail .meta .by{font-size:15px;color:#d8ccb8}
+.detail .close{margin-top:18px;font-family:var(--d-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  background:transparent;border:1px solid rgba(255,255,255,.4);color:#f3ece0;padding:8px 14px;border-radius:999px;cursor:pointer}
+@media(max-width:520px){.detail{flex-direction:column;text-align:center}.detail .meta h2{text-wrap:balance}}
+
+/* Editor de tapa */
+.editor{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;padding:20px;
+  background:rgba(8,6,4,.7);backdrop-filter:blur(8px)}
+.editor[aria-hidden="false"]{display:flex}
+.epanel{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;
+  width:100%;max-width:460px;max-height:86vh;overflow:auto;padding:18px}
+.epanel h3{font-family:var(--d-serif);font-weight:500;font-size:22px;margin:.1em 0 .2em}
+.epanel .sub{font-size:13px;color:var(--ink-soft);margin-bottom:12px}
+.epanel label{font-family:var(--d-mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);display:block;margin:12px 0 6px}
+.epanel input[type=text]{width:100%;font-family:var(--d-sans);font-size:14px;padding:9px 11px;border-radius:8px;
+  border:1px solid var(--line);background:transparent;color:var(--ink)}
+.erow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{font-family:var(--d-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;
+  padding:9px 13px;border-radius:999px;border:1px solid var(--ink);background:var(--ink);color:var(--paper)}
+.btn.sec{background:transparent;color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(68px,1fr));gap:8px;margin-top:12px}
+.grid .opt{aspect-ratio:2/3;border-radius:4px;background:#2e2a24 center/cover;border:2px solid transparent;cursor:pointer;padding:0}
+.grid .opt[aria-pressed="true"]{border-color:var(--accent)}
+.hint{font-size:12px;color:var(--ink-soft);margin-top:10px}
+
+footer{color:var(--ink-soft);font-size:12px;text-align:center;padding-block:10px 34px;font-family:var(--d-mono);letter-spacing:.04em}
+.edit-badge{display:inline-block;margin-left:6px;font-family:var(--d-mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:2px 8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Un archivo personal</div>
+    <h1 id="h1"><span id="typed"></span><span class="caret">&nbsp;</span></h1>
+    <div class="count" id="count">—</div>
+    <div class="toolbar" id="filters"></div>
+    <div class="toolbar">
+      <span class="spacer"></span>
+      <button class="pill ghost" id="editBtn" aria-pressed="false">Editar tapas</button>
+      <button class="pill" id="themeBtn">Tema</button>
+    </div>
+  </header>
+
+  <div class="shelf-outer">
+    <div class="shelf" id="shelf" role="list" aria-label="Estante de libros"></div>
+    <div class="board"></div>
+  </div>
+
+  <footer id="foot">Tu biblioteca · tocá un libro para ver la tapa</footer>
+</div>
+
+<div class="overlay" id="overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Detalle del libro">
+  <div class="detail">
+    <div class="cov" id="ovCov"></div>
+    <div class="meta">
+      <div class="g" id="ovGenre"></div>
+      <h2 id="ovTitle"></h2>
+      <div class="by" id="ovBy"></div>
+      <button class="close" id="ovClose">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<div class="editor" id="editor" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Elegir tapa">
+  <div class="epanel">
+    <h3 id="edTitle">Elegir tapa</h3>
+    <div class="sub" id="edBy"></div>
+    <label for="edUrl">Pegá la URL de una tapa (opcional)</label>
+    <input type="text" id="edUrl" placeholder="https://…jpg" autocomplete="off">
+    <div class="erow">
+      <button class="btn sec" id="edSearch">Buscar otras ediciones</button>
+      <button class="btn sec" id="edReset">Volver a la automática</button>
+    </div>
+    <div class="grid" id="edGrid"></div>
+    <div class="hint" id="edHint"></div>
+    <div class="erow" style="justify-content:flex-end">
+      <button class="btn sec" id="edCancel">Cancelar</button>
+      <button class="btn" id="edSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ Datos: tu biblioteca (favoritos primero) ============ */
+const BOOKS = [
+  {t:"Onyx Storm", a:"Rebecca Yarros", g:"Fantasy", face:true},
+  {t:"Fourth Wing", a:"Rebecca Yarros", g:"Fantasy"},
+  {t:"Iron Flame", a:"Rebecca Yarros", g:"Fantasy"},
+  {t:"A Court of Thorns and Roses", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"A Court of Mist and Fury", a:"Sarah J. Maas", g:"Fantasy", face:true},
+  {t:"A Court of Wings and Ruin", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"A Court of Silver Flames", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Kingdom of Ash", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Throne of Glass", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"House of Earth and Blood", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"House of Sky and Breath", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"House of Flame and Shadow", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"From Blood and Ash", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"A Kingdom of Flesh and Fire", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"The Crown of Gilded Bones", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"The War of Two Queens", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"The Serpent and the Wings of Night", a:"Carissa Broadbent", g:"Fantasy"},
+  {t:"The Ashes and the Star-Cursed King", a:"Carissa Broadbent", g:"Fantasy"},
+  {t:"Spark of the Everflame", a:"Penn Cole", g:"Fantasy"},
+  {t:"Glow of the Everflame", a:"Penn Cole", g:"Fantasy"},
+  {t:"Heat of the Everflame", a:"Penn Cole", g:"Fantasy"},
+  {t:"Burn of the Everflame", a:"Penn Cole", g:"Fantasy"},
+  {t:"Verity", a:"Colleen Hoover", g:"Thriller"},
+  {t:"The Housemaid", a:"Freida McFadden", g:"Thriller"},
+  {t:"The Housemaid's Secret", a:"Freida McFadden", g:"Thriller"},
+  {t:"The Housemaid Is Watching", a:"Freida McFadden", g:"Thriller"},
+  {t:"Never Lie", a:"Freida McFadden", g:"Thriller"},
+  {t:"The Boyfriend", a:"Freida McFadden", g:"Thriller"},
+  {t:"Mexican Gothic", a:"Silvia Moreno-Garcia", g:"Thriller"},
+  {t:"The Last House on Needless Street", a:"Catriona Ward", g:"Thriller"},
+  {t:"That's Not My Name", a:"Megan Lally", g:"Thriller"},
+  {t:"Next of Kin", a:"Kia Abdullah", g:"Thriller"},
+  {t:"The Better Sister", a:"Alafair Burke", g:"Thriller"},
+  {t:"The Last Thing He Told Me", a:"Laura Dave", g:"Thriller"},
+  {t:"The Seven Husbands of Evelyn Hugo", a:"Taylor Jenkins Reid", g:"Fiction"},
+  {t:"The Love Hypothesis", a:"Ali Hazelwood", g:"Romance"},
+  {t:"Pride and Prejudice", a:"Jane Austen", g:"Fiction"},
+  {t:"Assistant to the Villain", a:"Hannah Nicole Maehrer", g:"Fantasy"},
+  {t:"Apprentice to the Villain", a:"Hannah Nicole Maehrer", g:"Fantasy"},
+  {t:"Accomplice to the Villain", a:"Hannah Nicole Maehrer", g:"Fantasy"},
+  {t:"Adversary to the Villain", a:"Hannah Nicole Maehrer", g:"Fantasy"},
+  {t:"A Shadow in the Ember", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"A Light in the Flame", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"A Fire in the Flesh", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"A Crown of Ruin", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"Born of Blood and Ash", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"A Soul of Ash and Blood", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"The Primal of Blood and Bone", a:"Jennifer L. Armentrout", g:"Fantasy"},
+  {t:"The Assassin's Blade", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Heir of Fire", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Crown of Midnight", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Queen of Shadows", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Empire of Storms", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Tower of Dawn", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"A Court of Frost and Starlight", a:"Sarah J. Maas", g:"Fantasy"},
+  {t:"Slaying the Vampire Conqueror", a:"Carissa Broadbent", g:"Fantasy"},
+  {t:"Six Scorched Roses", a:"Carissa Broadbent", g:"Fantasy"},
+  {t:"The Widow's Husband's Secret Lie", a:"Freida McFadden", g:"Thriller"},
+  {t:"The Housemaid's Wedding", a:"Freida McFadden", g:"Thriller"},
+  {t:"Killing Monica", a:"Candace Bushnell", g:"Thriller"},
+  {t:"Untamed", a:"Glennon Doyle", g:"Nonfiction"},
+  {t:"Manifestadoras", a:"Anto Bian", g:"Nonfiction"},
+  {t:"Short Stories in French for Beginners", a:"Olly Richards", g:"Nonfiction"},
+  {t:"Think Like a Monk", a:"Jay Shetty", g:"Nonfiction"},
+  {t:"The Let Them Theory", a:"Mel Robbins", g:"Nonfiction"},
+  {t:"The Subtle Art of Not Giving a F*ck", a:"Mark Manson", g:"Nonfiction"},
+  {t:"Becoming Supernatural", a:"Joe Dispenza", g:"Nonfiction"},
+  {t:"Deja de ser tú", a:"Joe Dispenza", g:"Nonfiction"},
+  {t:"El placebo eres tú", a:"Joe Dispenza", g:"Nonfiction"},
+];
+
+/* ============ util ============ */
+const PAL=["#2f6f6a","#9c3848","#d9a441","#3a5a78","#c9772f","#5b4b8a","#7a9e7e","#a35d3a","#36414c","#6b4e71"];
+const slug=s=>s.toLowerCase().replace(/[^a-z0-9]/gi,"_").slice(0,60);
+function seed(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return((h>>>0)%100000)/100000;}
+const store={
+  get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},
+  del(k){try{localStorage.removeItem(k);}catch(e){}}
+};
+function lum(r,g,b){return (r*299+g*587+b*114)/1000/255;}
+
+/* ============ tapas: Open Library (se baja en el navegador) ============ */
+async function searchCoverId(b){
+  try{
+    const u="https://openlibrary.org/search.json?title="+encodeURIComponent(b.t)
+      +(b.a?("&author="+encodeURIComponent(b.a)):"")+"&limit=1&fields=cover_i,isbn";
+    const r=await fetch(u);const j=await r.json();
+    const d=j.docs&&j.docs[0];
+    if(d&&d.cover_i) return "https://covers.openlibrary.org/b/id/"+d.cover_i+"-L.jpg";
+    if(d&&d.isbn&&d.isbn[0]) return "https://covers.openlibrary.org/b/isbn/"+d.isbn[0]+"-L.jpg";
+  }catch(e){}
+  return null;
+}
+async function searchEditions(b){
+  try{
+    const u="https://openlibrary.org/search.json?title="+encodeURIComponent(b.t)
+      +(b.a?("&author="+encodeURIComponent(b.a)):"")+"&limit=16&fields=cover_i";
+    const r=await fetch(u);const j=await r.json();
+    const ids=[];(j.docs||[]).forEach(d=>{if(d.cover_i&&ids.indexOf(d.cover_i)<0)ids.push(d.cover_i);});
+    return ids.slice(0,12).map(id=>"https://covers.openlibrary.org/b/id/"+id+"-L.jpg");
+  }catch(e){return[];}
+}
+function loadImage(url){return new Promise(res=>{
+  const im=new Image();im.crossOrigin="anonymous";
+  im.onload=()=>{(im.naturalWidth<8)?res(null):res(im);};
+  im.onerror=()=>res(null);im.src=url;
+});}
+function sample(im){
+  try{
+    const c=document.createElement("canvas");c.width=30;c.height=45;
+    const x=c.getContext("2d");x.drawImage(im,0,0,30,45);
+    const d=x.getImageData(0,0,30,45).data;
+    let r=0,g=0,b=0,n=0;
+    for(let yy=0;yy<45;yy++)for(let xx=0;xx<5;xx++){const i=(yy*30+xx)*4;r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
+    const base=[Math.round(r/n),Math.round(g/n),Math.round(b/n)];
+    let best=-1,acc=base;
+    for(let i=0;i<d.length;i+=4){const R=d[i],G=d[i+1],B=d[i+2];const mx=Math.max(R,G,B),mn=Math.min(R,G,B),L=(mx+mn)/510;
+      if(L<.22||L>.82)continue;const s=mx===0?0:(mx-mn)/mx;if(s>best){best=s;acc=[R,G,B];}}
+    const li=lum(base[0],base[1],base[2]);
+    return {spine:`rgb(${base[0]},${base[1]},${base[2]})`,
+            accent:`rgba(${acc[0]},${acc[1]},${acc[2]},.9)`,
+            ink: li>.6?"#241f19":"#f7f3ea"};
+  }catch(e){return null;}
+}
+async function resolveCover(b){
+  const key="bk:"+slug(b.t);
+  const ovr=store.get("ovr:"+slug(b.t)); // {url}
+  if(!ovr){const c=store.get(key); if(c&&c.url) return c;}
+  let url = ovr&&ovr.url;
+  if(!url) url = await searchCoverId(b);
+  if(!url) return null;
+  const im=await loadImage(url);
+  let colors=im?sample(im):null;
+  const rec=Object.assign({url, has:!!im}, colors||{});
+  if(!ovr) store.set(key,rec);
+  return rec;
+}
+
+/* ============ render ============ */
+const shelf=document.getElementById("shelf");
+let editMode=false, activeFilter="Todos";
+
+function spineColorFallback(b){const c=PAL[Math.floor(seed(b.t+"c")*PAL.length)];
+  return {spine:c, accent:"rgba(255,255,255,.3)", ink:"#f4efe6"};}
+
+function makeBook(b){
+  const el=document.createElement("button");
+  el.className="book"+(b.face?" face":"");
+  el.setAttribute("role","listitem");
+  el.setAttribute("aria-label",b.t+" — "+b.a);
+  const sw=Math.round(32+seed(b.t+"w")*14);
+  const sh=Math.round(150+seed(b.t+"h")*58);
+  const fw=Math.round(sh*0.64);
+  el.style.setProperty("--sw",sw+"px");
+  el.style.setProperty("--sh",sh+"px");
+  el.style.setProperty("--fw",fw+"px");
+  const sur=(b.a||"").split(",")[0].trim().split(" ").pop();
+  el.innerHTML = b.face
+    ? `<div class="spine"><div class="face-img"></div><div class="pages"></div></div>`
+    : `<div class="spine">
+         <div class="strip"></div><div class="sheen"></div>
+         <div class="band t"></div><div class="band b"></div>
+         <div class="vtext"><span class="vt-title">${esc(b.t)}</span>${sur?`<span class="vt-author">${esc(sur)}</span>`:""}</div>
+       </div>`;
+  const fb=spineColorFallback(b);
+  el.style.setProperty("--spine",fb.spine);
+  el.style.setProperty("--accent",fb.accent);
+  el.style.setProperty("--ink-on",fb.ink);
+  el.addEventListener("click",()=>{ editMode?openEditor(b,el):openDetail(b); });
+  b._el=el;
+  return el;
+}
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+function applyCover(b,rec){
+  const el=b._el; if(!el||!rec) return;
+  b._cover=rec;
+  if(rec.spine) el.style.setProperty("--spine",rec.spine);
+  if(rec.accent) el.style.setProperty("--accent",rec.accent);
+  if(rec.ink) el.style.setProperty("--ink-on",rec.ink);
+  if(rec.url){
+    if(b.face){const f=el.querySelector(".face-img"); if(f) f.style.backgroundImage=`url("${rec.url}")`;}
+    else {const st=el.querySelector(".strip"); if(st) st.style.backgroundImage=`url("${rec.url}")`;}
+  }
+}
+
+function renderShelf(){
+  shelf.innerHTML="";
+  const list=BOOKS.filter(b=>activeFilter==="Todos"||b.g===activeFilter);
+  list.forEach(b=>shelf.appendChild(makeBook(b)));
+  // plantita al final
+  const p=document.createElement("div");p.className="plant";
+  const anyH=list.length?getComputedStyle(list[0]._el).getPropertyValue("--sh"):"150px";
+  p.style.setProperty("--sh","120px");
+  p.innerHTML=`<div class="leaf l"></div><div class="leaf r"></div><div class="leaf c"></div><div class="pot"></div>`;
+  shelf.appendChild(p);
+  // resolver tapas con poca concurrencia
+  queue(list);
+}
+let running=0;const MAXC=4;let pending=[];
+function queue(list){ pending=list.slice(); for(let i=0;i<MAXC;i++) pump(); }
+async function pump(){
+  if(!pending.length) return;
+  running++;
+  const b=pending.shift();
+  try{const rec=await resolveCover(b); applyCover(b,rec);}catch(e){}
+  running--;
+  if(pending.length) pump();
+}
+
+/* ============ filtros ============ */
+function buildFilters(){
+  const set=["Todos",...Array.from(new Set(BOOKS.map(b=>b.g)))];
+  const cont=document.getElementById("filters");
+  const es={Fantasy:"Fantasía",Thriller:"Thriller",Romance:"Romance",Fiction:"Ficción",Nonfiction:"No ficción",Todos:"Todos"};
+  set.forEach(g=>{
+    const b=document.createElement("button");b.className="pill";b.textContent=es[g]||g;
+    b.setAttribute("aria-pressed", g==="Todos"?"true":"false");
+    b.addEventListener("click",()=>{
+      activeFilter=g;[...cont.children].forEach(c=>c.setAttribute("aria-pressed","false"));
+      b.setAttribute("aria-pressed","true");renderShelf();
+    });
+    cont.appendChild(b);
+  });
+}
+
+/* ============ detalle ============ */
+const overlay=document.getElementById("overlay");
+function openDetail(b){
+  document.getElementById("ovGenre").textContent=b.g||"";
+  document.getElementById("ovTitle").textContent=b.t;
+  document.getElementById("ovBy").textContent=b.a||"";
+  const cov=document.getElementById("ovCov");
+  cov.style.backgroundImage = b._cover&&b._cover.url?`url("${b._cover.url}")`:"none";
+  cov.style.background = b._cover&&b._cover.url? `center/cover no-repeat url("${b._cover.url}")` : (b._cover&&b._cover.spine)||"#30405a";
+  overlay.setAttribute("aria-hidden","false");
+}
+document.getElementById("ovClose").addEventListener("click",()=>overlay.setAttribute("aria-hidden","true"));
+overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.setAttribute("aria-hidden","true");});
+
+/* ============ editor de tapa ============ */
+const editor=document.getElementById("editor");
+let edBook=null, edPick=null;
+function openEditor(b,el){
+  edBook=b; edPick=null;
+  document.getElementById("edTitle").textContent=b.t;
+  document.getElementById("edBy").textContent=b.a||"";
+  const cur=store.get("ovr:"+slug(b.t));
+  document.getElementById("edUrl").value=cur&&cur.url?cur.url:"";
+  document.getElementById("edGrid").innerHTML="";
+  document.getElementById("edHint").textContent="";
+  editor.setAttribute("aria-hidden","false");
+}
+document.getElementById("edCancel").addEventListener("click",()=>editor.setAttribute("aria-hidden","true"));
+editor.addEventListener("click",e=>{if(e.target===editor)editor.setAttribute("aria-hidden","true");});
+document.getElementById("edSearch").addEventListener("click",async()=>{
+  const grid=document.getElementById("edGrid");grid.innerHTML="";
+  document.getElementById("edHint").textContent="Buscando ediciones…";
+  const urls=await searchEditions(edBook);
+  document.getElementById("edHint").textContent=urls.length?"Tocá una tapa para elegirla.":"No encontré más ediciones.";
+  urls.forEach(u=>{
+    const o=document.createElement("button");o.className="opt";o.style.backgroundImage=`url("${u}")`;
+    o.setAttribute("aria-pressed","false");
+    o.addEventListener("click",()=>{
+      [...grid.children].forEach(c=>c.setAttribute("aria-pressed","false"));
+      o.setAttribute("aria-pressed","true");edPick=u;
+      document.getElementById("edUrl").value=u;
+    });
+    grid.appendChild(o);
+  });
+});
+document.getElementById("edReset").addEventListener("click",()=>{
+  if(!edBook)return;
+  store.del("ovr:"+slug(edBook.t)); store.del("bk:"+slug(edBook.t));
+  editor.setAttribute("aria-hidden","true");
+  resolveCover(edBook).then(r=>applyCover(edBook,r));
+});
+document.getElementById("edSave").addEventListener("click",async()=>{
+  if(!edBook)return;
+  const url=(document.getElementById("edUrl").value||"").trim()||edPick;
+  if(url){ store.set("ovr:"+slug(edBook.t),{url}); store.del("bk:"+slug(edBook.t)); }
+  editor.setAttribute("aria-hidden","true");
+  const rec=await resolveCover(edBook); applyCover(edBook,rec);
+});
+
+/* ============ barra: editar / tema ============ */
+const editBtn=document.getElementById("editBtn");
+editBtn.addEventListener("click",()=>{
+  editMode=!editMode; editBtn.setAttribute("aria-pressed",editMode?"true":"false");
+  document.getElementById("foot").innerHTML = editMode
+    ? 'Modo editar <span class="edit-badge">on</span> · tocá un libro para cambiar su tapa'
+    : 'Tu biblioteca · tocá un libro para ver la tapa';
+});
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  const r=document.documentElement;
+  const cur=r.getAttribute("data-theme");
+  const dark=cur?cur==="dark":matchMedia("(prefers-color-scheme:dark)").matches;
+  r.setAttribute("data-theme", dark?"light":"dark");
+});
+
+/* ============ heading tipeado ============ */
+(function(){
+  const full="Bienvenida a mi biblioteca";
+  const t=document.getElementById("typed");let i=0;
+  if(matchMedia("(prefers-reduced-motion:reduce)").matches){t.textContent=full;return;}
+  (function tick(){ t.textContent=full.slice(0,i); if(i++<=full.length) setTimeout(tick,72); })();
+})();
+
+/* ============ init ============ */
+document.getElementById("count").textContent = BOOKS.length+" volúmenes";
+buildFilters();
+renderShelf();
+window.addEventListener("keydown",e=>{if(e.key==="Escape"){overlay.setAttribute("aria-hidden","true");editor.setAttribute("aria-hidden","true");}});
+</script>
+</body>
+</html>
