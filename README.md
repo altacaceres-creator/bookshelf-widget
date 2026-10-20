@@ -29,8 +29,8 @@ The script ships with a small sample list; edit it from the menu.
 
 In the menu, tap **Importar de Goodreads** and paste your shelf's **RSS** link:
 
-- On goodreads.com open your shelf (e.g. *Read*), scroll to the bottom and copy the orange **RSS** link.
-- Your shelf must be **public**.
+- On goodreads.com open **My Books**, open your shelf (e.g. *Read*), and copy the page URL from the address bar — the widget turns it into the RSS feed for you. A direct `list_rss` link or just your numeric user id works too.
+- Your shelf must be **public** (Goodreads → Settings → Privacy).
 - Choose to replace or append, and optionally turn on **daily auto-sync**. Your manual tweaks (face-out books, custom covers) are preserved across syncs.
 
 ## 🌐 Web version

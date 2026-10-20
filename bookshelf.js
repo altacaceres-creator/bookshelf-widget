@@ -347,21 +347,47 @@ function parseGoodreads(xml){
   }
   return out;
 }
+// Acepta cualquier link de Goodreads (página o RSS) o un número de usuario,
+// y arma la URL RSS correcta. Devuelve null si no reconoce nada.
+function normalizarGoodreads(input){
+  let s = (input||"").trim();
+  if (!s) return null;
+  // ya es un feed RSS
+  if (/\/review\/list_rss\//i.test(s)) return s;
+  // número de usuario suelto
+  if (/^\d+$/.test(s)) return "https://www.goodreads.com/review/list_rss/" + s + "?shelf=read";
+  // sacar el id de usuario de cualquier URL de Goodreads
+  let m = s.match(/\/review\/list\/(\d+)/i) || s.match(/\/user\/show\/(\d+)/i) || s.match(/goodreads\.com\/(\d+)/i);
+  if (!m) { const any = s.match(/(\d{5,})/); if (any) m = any; }
+  if (!m) return null;
+  const id = m[1];
+  const shelf = (s.match(/[?&]shelf=([^&#]+)/i) || [,"read"])[1];
+  return "https://www.goodreads.com/review/list_rss/" + id + "?shelf=" + shelf;
+}
+
 async function importarGoodreads(){
   const a = new Alert();
   a.title = "Importar de Goodreads";
-  a.message = "Pegá el link RSS de tu estante.\n\nCómo conseguirlo: en goodreads.com entrá a tu estante (ej. 'read'), bajá hasta el final de la página y tocá el link naranja 'RSS'. Copiá esa URL y pegala acá.\n(Tu estante tiene que ser público.)";
-  a.addTextField("https://www.goodreads.com/review/list_rss/…", "");
+  a.message = "Pegá el link de tu estante de Goodreads.\n\nCómo conseguirlo: en goodreads.com entrá a My Books, abrí tu estante (ej. 'Read') y copiá la dirección de esa página (la de la barra del navegador). Yo me encargo del resto.\n(Tu estante tiene que ser público.)";
+  a.addTextField("https://www.goodreads.com/review/list/…", "");
   a.addAction("Importar"); a.addCancelAction("Cancelar");
   const r = await a.presentAlert();
   if (r !== 0) return;
-  const url = (a.textFieldValue(0)||"").trim();
-  if (!url) return;
+  const url = normalizarGoodreads(a.textFieldValue(0));
+  if (!url) {
+    const n = new Alert(); n.title = "Link no reconocido";
+    n.message = "Pegá el link de tu estante de Goodreads (el de la barra del navegador, que contiene tu número de usuario).";
+    n.addAction("OK"); await n.presentAlert(); return;
+  }
   let xml = "";
-  try { xml = await new Request(url).loadString(); } catch(e) {}
+  try {
+    const req = new Request(url);
+    req.headers = { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" };
+    xml = await req.loadString();
+  } catch(e) {}
   if (!xml || xml.indexOf("<item>") < 0) {
     const n = new Alert(); n.title = "No pude leer el feed";
-    n.message = "Fijate que sea el link RSS (no el de la página) y que el estante sea público.";
+    n.message = "Revisá que tu estante de Goodreads sea público (Goodreads → Settings → Privacy) y volvé a intentar.";
     n.addAction("OK"); await n.presentAlert(); return;
   }
   const items = parseGoodreads(xml);
@@ -409,11 +435,16 @@ function aplicarGoodreads(items){
   const faltan = items.filter(it => !libros.some(l => slug(l.titulo) === slug(it.titulo)));
   return libros.concat(faltan);
 }
+function reqGoodreads(url){
+  const req = new Request(url);
+  req.headers = { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" };
+  return req;
+}
 async function maybeSyncGoodreads(){
   if (!cfg.grAuto || !cfg.grUrl) return;
   if (Date.now() - (cfg.grLast||0) < 20*60*60*1000) return;   // ~1 vez al día
   try {
-    const xml = await new Request(cfg.grUrl).loadString();
+    const xml = await reqGoodreads(cfg.grUrl).loadString();
     if (xml && xml.indexOf("<item>") >= 0) { const items = parseGoodreads(xml); if (items.length) { libros = aplicarGoodreads(items); guardar(); } }
   } catch(e) {}
   cfg.grLast = Date.now(); guardarCfg();
@@ -421,7 +452,7 @@ async function maybeSyncGoodreads(){
 async function syncAhora(){
   if (!cfg.grUrl) return;
   let ok = false;
-  try { const xml = await new Request(cfg.grUrl).loadString(); if (xml && xml.indexOf("<item>")>=0){ const items = parseGoodreads(xml); if (items.length){ libros = aplicarGoodreads(items); guardar(); ok = true; } } } catch(e){}
+  try { const xml = await reqGoodreads(cfg.grUrl).loadString(); if (xml && xml.indexOf("<item>")>=0){ const items = parseGoodreads(xml); if (items.length){ libros = aplicarGoodreads(items); guardar(); ok = true; } } } catch(e){}
   cfg.grLast = Date.now(); guardarCfg();
   const n = new Alert();
   n.title = ok ? "Listo" : "No pude sincronizar";
