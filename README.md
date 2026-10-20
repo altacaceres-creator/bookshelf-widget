@@ -2,8 +2,7 @@
 
 A chic bookshelf on your iPhone home screen — real book spines and covers, no paid app required. Built with [Scriptable](https://scriptable.app). There's also a web version you can host for free and share with friends.
 
-> **Add a screenshot here** → drop a photo of your widget into `screenshots/` and link it:
-> `![Bookshelf widget](screenshots/widget.png)`
+![Bookshelf widget — large size, two shelves](screenshots/widget.png)
 
 ---
 
