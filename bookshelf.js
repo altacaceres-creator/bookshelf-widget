@@ -57,7 +57,7 @@ guardar();
 
 // ── configuración de vista (fijo / rotar / por autor) ──
 const cfgPath = fm.joinPath(fm.documentsDirectory(), "biblio_config.json");
-let cfg = { rotar: ROTAR, modo: "todo", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
+let cfg = { rotar: ROTAR, modo: "todo", rotarCada: "dia", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
 try { if (fm.fileExists(cfgPath)) cfg = Object.assign(cfg, JSON.parse(fm.readString(cfgPath))); } catch(e) {}
 if (!cfg.covers) cfg.covers = {};
 function guardarCfg(){ try { fm.writeString(cfgPath, JSON.stringify(cfg)); } catch(e) {} }
@@ -300,7 +300,11 @@ function ventana(arr, max){
   if (!cfg.rotar) return arr.slice(0, max);              // fijo
   if (cfg.modo === "autor") return ventanaAutor(arr, max); // rota por autor
   if (arr.length <= max) return arr.slice(0, max);
-  const periodo = 30*60*1000, paso = 2;                  // rota por toda la biblioteca
+  // "dia": cambia 1 vez por día (así preview y widget muestran lo mismo todo el día)
+  // "rato": cambia cada ~30 min (más vivo, pero puede no coincidir con la preview)
+  const diario = (cfg.rotarCada !== "rato");
+  const periodo = diario ? 24*60*60*1000 : 30*60*1000;
+  const paso = diario ? max : 2;                         // de día: una "página" nueva por jornada
   const off = (Math.floor(Date.now()/periodo)*paso) % arr.length;
   const out = [];
   for (let i=0;i<max;i++) out.push(arr[(off+i)%arr.length]);
@@ -721,6 +725,16 @@ async function menu(){
       c.titleFont = Font.semiboldSystemFont(16);
       r.onSelect = () => { cfg.modo = (cfg.modo==="autor") ? "todo" : "autor"; guardarCfg(); construir(); table.reload(); };
       table.addRow(r);
+
+      if (cfg.modo !== "autor") {
+        const diario = (cfg.rotarCada !== "rato");
+        r = new UITableRow(); r.height = 54;
+        c = r.addText(diario ? "📅  Cambia: cada día" : "⏱️  Cambia: durante el día",
+          diario ? "Preview y widget coinciden todo el día — tocá para que cambie seguido" : "Más vivo, pero puede no coincidir con la preview — tocá para 1 vez al día");
+        c.titleFont = Font.semiboldSystemFont(16);
+        r.onSelect = () => { cfg.rotarCada = diario ? "rato" : "dia"; guardarCfg(); construir(); table.reload(); };
+        table.addRow(r);
+      }
     }
 
     if (cfg.grUrl) {
