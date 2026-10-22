@@ -57,9 +57,25 @@ guardar();
 
 // ── configuración de vista (fijo / rotar / por autor) ──
 const cfgPath = fm.joinPath(fm.documentsDirectory(), "biblio_config.json");
-let cfg = { rotar: ROTAR, modo: "todo", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true };
+let cfg = { rotar: ROTAR, modo: "todo", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
 try { if (fm.fileExists(cfgPath)) cfg = Object.assign(cfg, JSON.parse(fm.readString(cfgPath))); } catch(e) {}
+if (!cfg.covers) cfg.covers = {};
 function guardarCfg(){ try { fm.writeString(cfgPath, JSON.stringify(cfg)); } catch(e) {} }
+
+// ── tapas elegidas a mano: se guardan aparte y se mantienen aunque sincronices ──
+function nslug(t){ return slug(String(t||"").replace(/\s*\([^)]*\)\s*$/,"")); }  // ignora "(Serie, #2)"
+function fijarTapa(l){ cfg.covers[nslug(l.titulo)] = l.cover; guardarCfg(); }
+function soltarTapa(l){ delete cfg.covers[nslug(l.titulo)]; guardarCfg(); }
+function aplicarTapas(list){ const m = cfg.covers||{}; list.forEach(l => { const u = m[nslug(l.titulo)]; if (u) l.cover = u; }); return list; }
+// La primera vez, recordá las tapas que pusiste A MANO (links externos),
+// para no perderlas al sincronizar. Las automáticas (OpenLibrary/Google/Fable) no se fijan.
+if (!cfg.coversSeeded) {
+  libros.forEach(l => {
+    if (l.cover && !/openlibrary\.org|googleapis\.com|books\.google|fablecdn\.net|cdn\.fable\.co/i.test(l.cover))
+      cfg.covers[nslug(l.titulo)] = l.cover;
+  });
+  cfg.coversSeeded = true; guardarCfg();
+}
 
 // capacidad por estante — replica el acomodado del dibujo para saber cuántos entran
 function seedW(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return((h>>>0)%100000)/100000;}
@@ -291,7 +307,7 @@ function ventana(arr, max){
 
 async function crearImagen(family){
   const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:22} }[family]||{W:360,H:170,shelves:1,max:11};
-  const sel = ventana(libros, CFG.max);
+  const sel = ventana(aplicarTapas(libros), CFG.max);
   const books = [];
   for (const l of sel){
     const b64 = await coverB64(l);
@@ -540,7 +556,7 @@ async function pegarURLTapa(l){
   a.addTextField("https://…", l.cover || "");
   a.addAction("Guardar"); a.addCancelAction("Cancelar");
   const r = await a.presentAlert();
-  if (r === 0) { const u = (a.textFieldValue(0)||"").trim(); if (u) { l.cover = u; borrarCacheDe(l); guardar(); } }
+  if (r === 0) { const u = (a.textFieldValue(0)||"").trim(); if (u) { l.cover = u; fijarTapa(l); borrarCacheDe(l); guardar(); } }
 }
 
 async function elegirEdicion(l){
@@ -560,7 +576,7 @@ async function elegirEdicion(l){
     im.widthWeight = 100;
     row.onSelect = () => {
       l.cover = "https://covers.openlibrary.org/b/id/" + id + "-L.jpg";
-      borrarCacheDe(l); guardar();
+      fijarTapa(l); borrarCacheDe(l); guardar();
       t.removeAllRows(); const d = new UITableRow(); d.addText("✅  Tapa elegida — cerrá para volver"); t.addRow(d); t.reload();
     };
     t.addRow(row);
@@ -579,7 +595,7 @@ async function cambiarTapa(l){
   const r = await a.presentSheet();
   if (r === 0) await elegirEdicion(l);
   else if (r === 1) await pegarURLTapa(l);
-  else if (r === 2) { delete l.cover; borrarCacheDe(l); guardar(); }
+  else if (r === 2) { delete l.cover; soltarTapa(l); borrarCacheDe(l); guardar(); }
 }
 
 async function accionesLibro(i){
