@@ -43,7 +43,7 @@ const FABLE_LIST_ID = "";
 // =========== de acá para abajo no hace falta tocar ===========
 
 const fm = FileManager.local();
-const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos4");
+const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos5");
 if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir);
 const listaPath = fm.joinPath(fm.documentsDirectory(), "mi_biblioteca.json");
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]/gi,"_").slice(0,60);}
@@ -119,13 +119,15 @@ async function traerFable(){
   } catch(e){ return null; }
 }
 function mergeFable(items){
-  // Reemplaza la lista por la de Fable, conservando tus ajustes (de frente, tapa manual, leyendo).
+  // Reemplaza la lista por la de Fable usando SUS tapas. Conserva tus flags
+  // (de frente / leyendo). Las tapas que fijaste a mano se reaplican aparte
+  // (aplicarTapas), así las lindas de Fable ganan a las automáticas viejas.
   const prev = {}; libros.forEach(l => { prev[slug(l.titulo)] = l; });
   return items.map(it => {
     const n = { titulo: it.titulo, autor: it.autor };
-    if (it.cover) n.cover = it.cover;
+    if (it.cover) n.cover = it.cover;                 // tapa de Fable
     const o = prev[slug(it.titulo)];
-    if (o) { if (o.face) n.face = true; if (o.cover) n.cover = o.cover; if (o.leyendo) n.leyendo = true; }
+    if (o) { if (o.face) n.face = true; if (o.leyendo) n.leyendo = true; }
     return n;
   });
 }
@@ -669,7 +671,9 @@ async function menu(){
       r.onSelect = async () => {
         const items = await traerFable();
         const n = new Alert();
-        if (items && items.length){ libros = mergeFable(items); cfg.fbLast = Date.now(); guardar(); guardarCfg();
+        if (items && items.length){
+          libros = mergeFable(items); cfg.fbLast = Date.now(); guardar(); guardarCfg();
+          try { if (fm.fileExists(cacheDir)) { for (const f of fm.listContents(cacheDir)) fm.remove(fm.joinPath(cacheDir, f)); } } catch(e){}  // que bajen las tapas de Fable frescas
           n.title = "Listo"; n.message = "Actualicé desde Fable: " + libros.length + " libros."; }
         else { n.title = "No pude leer Fable"; n.message = "Revisá tu conexión o los IDs de Fable."; }
         n.addAction("OK"); await n.presentAlert(); construir(); table.reload();
