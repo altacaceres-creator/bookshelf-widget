@@ -29,13 +29,21 @@ const PLANTA = true;
 const COLOR_CARD = "#14141a";
 const COLOR_REPISA = "#5f4027";
 const ROTAR = true;   // el estante va rotando los libros cada vez que iOS refresca (poné false para dejarlo quieto)
+
+// ── FABLE (opcional): sincroniza solo desde tu lista de Fable ──
+//   Dejá en "" para no usar Fable. Para activarlo, poné tu USER_ID
+//   y el LIST_ID de tu lista (ej. "Finished"). Cómo conseguirlos:
+//   abrí tu lista compartida de Fable en la compu, y están en la URL
+//   de la API que carga los libros. (Pedímelos y te ayudo.)
+const FABLE_USER_ID = "";
+const FABLE_LIST_ID = "";
 // ─────────────────────────────────────────────────────────────
 
 
 // =========== de acá para abajo no hace falta tocar ===========
 
 const fm = FileManager.local();
-const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos3");
+const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos4");
 if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir);
 const listaPath = fm.joinPath(fm.documentsDirectory(), "mi_biblioteca.json");
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]/gi,"_").slice(0,60);}
@@ -49,7 +57,7 @@ guardar();
 
 // ── configuración de vista (fijo / rotar / por autor) ──
 const cfgPath = fm.joinPath(fm.documentsDirectory(), "biblio_config.json");
-let cfg = { rotar: ROTAR, modo: "todo", grUrl: "", grAuto: false, grLast: 0, grSync: "merge" };
+let cfg = { rotar: ROTAR, modo: "todo", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true };
 try { if (fm.fileExists(cfgPath)) cfg = Object.assign(cfg, JSON.parse(fm.readString(cfgPath))); } catch(e) {}
 function guardarCfg(){ try { fm.writeString(cfgPath, JSON.stringify(cfg)); } catch(e) {} }
 
@@ -70,6 +78,47 @@ function capacidad(sel, family){
   }
   if (counts.length<C.shelves) counts.push(cur);
   return counts;
+}
+
+// ── Fable: trae tu lista Finished (con las tapas de Fable) ──
+async function traerFable(){
+  if (!FABLE_USER_ID || !FABLE_LIST_ID) return null;
+  const url = "https://api.fable.co/api/v2/users/"+FABLE_USER_ID+"/book_lists/"+FABLE_LIST_ID+"/books?limit=100";
+  try {
+    const req = new Request(url);
+    req.timeoutInterval = 20;
+    req.headers = { "User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" };
+    const j = await req.loadJSON();
+    const arr = j.results || [];
+    return arr.map(x => {
+      const b = x.book || x;
+      const a = (b.authors && b.authors.length) ? b.authors.map(z=>z.name||z).join(", ") : (b.byline || "");
+      // tapa de Fable en CHICO (vía el proxy de imágenes) para no reventar la memoria del widget
+      let cov = b.cover_image || b.cover_image_small || "";
+      if (cov.indexOf("cdn.fable.co") >= 0 && cov.indexOf("img.fablecdn.net") < 0)
+        cov = "https://img.fablecdn.net/images/" + cov.replace(/^https?:\/\//,"");
+      cov = cov.split("?")[0] + "?w=240";
+      return { titulo: b.title, autor: a, cover: cov };
+    }).filter(x => x.titulo);
+  } catch(e){ return null; }
+}
+function mergeFable(items){
+  // Reemplaza la lista por la de Fable, conservando tus ajustes (de frente, tapa manual, leyendo).
+  const prev = {}; libros.forEach(l => { prev[slug(l.titulo)] = l; });
+  return items.map(it => {
+    const n = { titulo: it.titulo, autor: it.autor };
+    if (it.cover) n.cover = it.cover;
+    const o = prev[slug(it.titulo)];
+    if (o) { if (o.face) n.face = true; if (o.cover) n.cover = o.cover; if (o.leyendo) n.leyendo = true; }
+    return n;
+  });
+}
+async function maybeSyncFable(){
+  if (!FABLE_USER_ID || !FABLE_LIST_ID || !cfg.fbAuto) return;
+  if (Date.now() - (cfg.fbLast||0) < 20*60*60*1000) return;   // ~1 vez al día
+  const items = await traerFable();
+  if (items && items.length) { libros = mergeFable(items); guardar(); }
+  cfg.fbLast = Date.now(); guardarCfg();
 }
 
 async function coverURL(l){
@@ -262,6 +311,7 @@ async function crearImagen(family){
 async function crearWidget(){
   const family = config.widgetFamily || "medium";
   const fam = (family === "small") ? "medium" : family;
+  await maybeSyncFable();                      // se actualiza solo desde Fable (si está configurado)
   await maybeSyncGoodreads();                 // se actualiza solo desde Goodreads (si está activado)
   const img = await crearImagen(fam);
   const w = new ListWidget();
@@ -596,6 +646,20 @@ async function menu(){
     c = r.addText("🔀  Mezclar"); c.titleFont = Font.semiboldSystemFont(16);
     r.onSelect = () => { mezclar(); construir(); table.reload(); };
     table.addRow(r);
+
+    if (FABLE_USER_ID && FABLE_LIST_ID){
+      r = new UITableRow(); r.height = 50;
+      c = r.addText("📘  Sincronizar con Fable ahora"); c.titleFont = Font.semiboldSystemFont(16);
+      r.onSelect = async () => {
+        const items = await traerFable();
+        const n = new Alert();
+        if (items && items.length){ libros = mergeFable(items); cfg.fbLast = Date.now(); guardar(); guardarCfg();
+          n.title = "Listo"; n.message = "Actualicé desde Fable: " + libros.length + " libros."; }
+        else { n.title = "No pude leer Fable"; n.message = "Revisá tu conexión o los IDs de Fable."; }
+        n.addAction("OK"); await n.presentAlert(); construir(); table.reload();
+      };
+      table.addRow(r);
+    }
 
     r = new UITableRow(); r.height = 50;
     c = r.addText("👀  Vista previa (mediano)"); c.titleFont = Font.semiboldSystemFont(16);
