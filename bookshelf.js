@@ -337,6 +337,9 @@ async function crearWidget(){
   w.backgroundColor = new Color(COLOR_CARD);
   if (img) w.backgroundImage = img;
   else { const t = w.addText("Tocá el script en Scriptable para configurar"); t.textColor = Color.white(); t.font = Font.systemFont(12); }
+  // Pedile a iOS que refresque seguido, así los cambios (sacar/agregar libros,
+  // tapas, rotación) se ven rápido en vez de quedar pegados horas.
+  w.refreshAfterDate = new Date(Date.now() + 10*60*1000);   // ~10 min
   return w;
 }
 
