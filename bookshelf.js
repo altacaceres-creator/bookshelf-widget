@@ -46,7 +46,16 @@ const fm = FileManager.local();
 const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos5");
 if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir);
 const listaPath = fm.joinPath(fm.documentsDirectory(), "mi_biblioteca.json");
+const libroActualPath = fm.joinPath(fm.documentsDirectory(), "libro_actual.json"); // compartido con "Leyendo ahora"
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]/gi,"_").slice(0,60);}
+
+// Temas del estante
+const TEMAS = {
+  oscuro:   { card: "#14141a", repisa: "#5f4027", dark: true },
+  academia: { card: "#e8dec9", repisa: "#b2874f", dark: false },
+};
+// A dónde va al tocar el widget
+const FABLE_URL = "https://fable.co";
 
 // ── lista guardada (se edita desde el menú) ──
 let libros = null;
@@ -57,7 +66,7 @@ guardar();
 
 // ── configuración de vista (fijo / rotar / por autor) ──
 const cfgPath = fm.joinPath(fm.documentsDirectory(), "biblio_config.json");
-let cfg = { rotar: ROTAR, modo: "todo", rotarCada: "dia", grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
+let cfg = { rotar: ROTAR, modo: "todo", rotarCada: "dia", tema: "oscuro", destacarLeyendo: true, grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
 try { if (fm.fileExists(cfgPath)) cfg = Object.assign(cfg, JSON.parse(fm.readString(cfgPath))); } catch(e) {}
 if (!cfg.covers) cfg.covers = {};
 function guardarCfg(){ try { fm.writeString(cfgPath, JSON.stringify(cfg)); } catch(e) {} }
@@ -139,22 +148,25 @@ async function maybeSyncFable(){
   cfg.fbLast = Date.now(); guardarCfg();
 }
 
+function normTitulo(t){
+  return String(t||"").replace(/½/g," 1/2").replace(/¼/g," 1/4").replace(/¾/g," 3/4")
+    .replace(/&/g," and ").replace(/\s+/g," ").trim();
+}
 async function coverURL(l){
-  // 1) Open Library — ediciones en INGLÉS
+  const consulta = (normTitulo(l.titulo) + " " + (l.autor||"")).trim();
+  // 1) Open Library — búsqueda libre (más tolerante)
   try {
-    const q = "title=" + encodeURIComponent(l.titulo) + (l.autor ? ("&author=" + encodeURIComponent(l.autor)) : "");
-    const j = await new Request("https://openlibrary.org/search.json?" + q + "&language=eng&limit=1&fields=cover_i,isbn").loadJSON();
+    const j = await new Request("https://openlibrary.org/search.json?q=" + encodeURIComponent(consulta) + "&limit=1&fields=cover_i,isbn").loadJSON();
     const doc = j.docs && j.docs[0];
-    if (doc && doc.cover_i) return "https://covers.openlibrary.org/b/id/" + doc.cover_i + "-L.jpg?default=false";
-    if (doc && doc.isbn && doc.isbn[0]) return "https://covers.openlibrary.org/b/isbn/" + doc.isbn[0] + "-L.jpg?default=false";
+    if (doc && doc.cover_i) return "https://covers.openlibrary.org/b/id/" + doc.cover_i + "-L.jpg";
+    if (doc && doc.isbn && doc.isbn[0]) return "https://covers.openlibrary.org/b/isbn/" + doc.isbn[0] + "-L.jpg";
   } catch(e){}
-  // 2) Google Books (fallback, en inglés)
+  // 2) Google Books (fallback)
   try {
-    const q2 = encodeURIComponent((l.titulo + " " + (l.autor||"")).trim());
-    const j2 = await new Request("https://www.googleapis.com/books/v1/volumes?q=" + q2 + "&maxResults=1&langRestrict=en").loadJSON();
+    const j2 = await new Request("https://www.googleapis.com/books/v1/volumes?q=" + encodeURIComponent(consulta) + "&maxResults=1").loadJSON();
     const links = j2.items && j2.items[0] && j2.items[0].volumeInfo && j2.items[0].volumeInfo.imageLinks;
     let u = links && (links.thumbnail || links.smallThumbnail);
-    if (u) return u.replace("http://","https://").replace("&edge=curl","");
+    if (u) return u.replace("http://","https://").replace("&edge=curl","").replace("zoom=1","zoom=2");
   } catch(e){}
   return null;
 }
@@ -222,10 +234,31 @@ const RENDER_JS = function(){
     var tx0=x+wrap+4,tw=w-wrap-8,cx=x+wrap+(w-wrap)/2;
     ctx.fillStyle=accent;ctx.fillRect(tx0,y+8,tw,1.3);ctx.fillRect(tx0,y+h-9,tw,1.3);
     var tfs=Math.max(7,Math.min(10,(w-wrap)*0.52));
-    var hasA=!!(b.a&&(w-wrap)>=13);
-    vfit(ctx,b.t,cx,y+13,hasA?y+h*0.70:y+h-11,tfs,"600",ink);
-    if(hasA){var sp=b.a.split(",")[0].trim().split(" ");var sur=sp[sp.length-1];
-      vfit(ctx,sur,cx,y+h*0.74,y+h-10,Math.max(6,tfs-2),"500",inkDim);}
+    // autor al pie SOLO si el apellido entra entero (nada de "Bu…")
+    var afs=Math.max(6,tfs-2), autor="";
+    if(b.a && (w-wrap)>=15){
+      var sp=b.a.split(",")[0].trim().split(" ");var sur=sp[sp.length-1];
+      ctx.save();ctx.font="500 "+afs+"px -apple-system,Helvetica,Arial,sans-serif";
+      var availA=(y+h-10)-(y+h*0.74)-2;
+      if(ctx.measureText(sur).width<=availA) autor=sur;
+      ctx.restore();
+    }
+    if(autor){ vfit(ctx,b.t,cx,y+13,y+h*0.70,tfs,"600",ink); vfit(ctx,autor,cx,y+h*0.74,y+h-10,afs,"500",inkDim); }
+    else { vfit(ctx,b.t,cx,y+13,y+h-11,tfs,"600",ink); }
+    if(b.ley) marcador(ctx,x,y,w,false);
+  }
+  function marcador(ctx,x,y,w,isFace){
+    var rojo="#c0392b";
+    if(isFace){
+      var bw=12, bx=x+w-bw-8, bh=22, yt=y-1;
+      ctx.fillStyle=rojo;ctx.beginPath();
+      ctx.moveTo(bx,yt);ctx.lineTo(bx+bw,yt);ctx.lineTo(bx+bw,yt+bh);
+      ctx.lineTo(bx+bw/2,yt+bh-5);ctx.lineTo(bx,yt+bh);ctx.closePath();ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,0.25)";ctx.fillRect(bx,yt,2,bh-4);
+    } else {
+      ctx.fillStyle=rojo;ctx.fillRect(x,y,w,3);
+      ctx.fillStyle="rgba(255,255,255,0.25)";ctx.fillRect(x,y,w,1);
+    }
   }
   function face(ctx,it,x,base){
     var w=it.w,h=it.h,y=base-h;
@@ -235,6 +268,7 @@ const RENDER_JS = function(){
     ctx.fillStyle="rgba(0,0,0,0.16)";ctx.fillRect(x,y,w,2);
     ctx.fillStyle="rgba(222,212,196,0.95)";ctx.fillRect(x+w,y+2,2.5,h-2);
     var fg=ctx.createLinearGradient(x,0,x+w,0);fg.addColorStop(0,"rgba(255,255,255,0.10)");fg.addColorStop(0.2,"rgba(255,255,255,0)");fg.addColorStop(1,"rgba(0,0,0,0.07)");ctx.fillStyle=fg;ctx.fillRect(x,y,w,h);
+    if(it.b.ley) marcador(ctx,x,y,w,true);
   }
   function plant(ctx,x,base){
     function el(cx,cy,rx,ry,rot,c){ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);ctx.fillStyle=c;ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);ctx.fill();ctx.restore();}
@@ -243,14 +277,15 @@ const RENDER_JS = function(){
     ctx.fillStyle="#c47a4e";ctx.beginPath();ctx.moveTo(x+4,base-32);ctx.lineTo(x+28,base-32);ctx.lineTo(x+25,base-2);ctx.lineTo(x+7,base-2);ctx.closePath();ctx.fill();
     ctx.fillStyle="#d98a5c";ctx.fillRect(x+2,base-34,28,6);
   }
-  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA){
+  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK){
     var SCALE=3,PAD=16,GAP=3,BANDGAP=12;
     return (async function(){
       for(var i=0;i<BOOKS.length;i++){BOOKS[i].im=await loadImg(BOOKS[i].img);}
       var cv=document.getElementById("c");cv.width=W*SCALE;cv.height=H*SCALE;
       var ctx=cv.getContext("2d");ctx.scale(SCALE,SCALE);
       rr(ctx,0,0,W,H,16);ctx.fillStyle=CARD;ctx.fill();ctx.save();rr(ctx,0,0,W,H,16);ctx.clip();
-      var bgg=ctx.createLinearGradient(0,0,0,H);bgg.addColorStop(0,"rgba(255,255,255,0.05)");bgg.addColorStop(0.55,"rgba(0,0,0,0)");bgg.addColorStop(1,"rgba(0,0,0,0.20)");ctx.fillStyle=bgg;ctx.fillRect(0,0,W,H);
+      var sombraFondo = DARK ? 0.20 : 0.10;
+      var bgg=ctx.createLinearGradient(0,0,0,H);bgg.addColorStop(0,"rgba(255,255,255,0.05)");bgg.addColorStop(0.55,"rgba(0,0,0,0)");bgg.addColorStop(1,"rgba(0,0,0,"+sombraFondo+")");ctx.fillStyle=bgg;ctx.fillRect(0,0,W,H);
       var usableW=W-PAD*2;var bandH=Math.round((H-PAD*2-BANDGAP*(SHELVES-1))/SHELVES);
       var items=BOOKS.map(function(b){
         if(b.face&&b.im){var h=Math.round(bandH*0.96);return {b:b,im:b.im,w:Math.round(h*0.64),h:h,face:true};}
@@ -276,7 +311,7 @@ const RENDER_JS = function(){
           cx+=o.w+GAP;}
       }
       var vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.62);
-      vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,0.22)");
+      vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,"+(DARK?0.22:0.10)+")");
       ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
       ctx.restore();
       return cv.toDataURL("image/png");
@@ -311,19 +346,35 @@ function ventana(arr, max){
   return out;
 }
 
+function leerLibroActual(){
+  try { if (fm.fileExists(libroActualPath)) { const p = JSON.parse(fm.readString(libroActualPath)); if (p && p.titulo) return p; } } catch(e){}
+  return null;
+}
+
 async function crearImagen(family){
   const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:22} }[family]||{W:360,H:170,shelves:1,max:11};
-  const sel = ventana(aplicarTapas(libros), CFG.max);
+  const T = TEMAS[cfg.tema] || TEMAS.oscuro;
+
+  let base = aplicarTapas(libros);
+  let destacado = null;
+  const act = cfg.destacarLeyendo ? leerLibroActual() : null;
+  if (act) {
+    destacado = { titulo: act.titulo, autor: act.autor||"", cover: act.cover, face: true, ley: true };
+    base = base.filter(l => nslug(l.titulo) !== nslug(act.titulo));   // no duplicar
+  }
+  let sel = ventana(base, destacado ? CFG.max-1 : CFG.max);
+  if (destacado) sel = [destacado].concat(sel);
+
   const books = [];
   for (const l of sel){
     const b64 = await coverB64(l);
-    books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
+    books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, ley:!!l.ley, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
   }
   const wv = new WebView();
   await wv.loadHTML("<canvas id='c'></canvas>", null, new Size(CFG.W, CFG.H), false);
   const bootstrap = "(" + RENDER_JS.toString() + ")();";
   const call = "(function(){window.__run(" + JSON.stringify(books) + "," + CFG.W + "," + CFG.H + "," + CFG.shelves
-    + ",'" + COLOR_REPISA + "','" + COLOR_CARD + "'," + (PLANTA?"true":"false") + ")"
+    + ",'" + T.repisa + "','" + T.card + "'," + (PLANTA?"true":"false") + "," + (T.dark?"true":"false") + ")"
     + ".then(function(d){completion(d);}).catch(function(e){completion('ERR:'+String(e));});})();";
   const out = await wv.evaluateJavaScript(bootstrap + call, true);
   if (typeof out !== "string" || out.indexOf("data:image") !== 0) return null;
@@ -338,9 +389,10 @@ async function crearWidget(){
   const img = await crearImagen(fam);
   const w = new ListWidget();
   w.setPadding(0,0,0,0);
-  w.backgroundColor = new Color(COLOR_CARD);
+  w.backgroundColor = new Color((TEMAS[cfg.tema]||TEMAS.oscuro).card);
   if (img) w.backgroundImage = img;
-  else { const t = w.addText("Tocá el script en Scriptable para configurar"); t.textColor = Color.white(); t.font = Font.systemFont(12); }
+  else { const t = w.addText("Tocá el script en Scriptable para configurar"); t.textColor = new Color((TEMAS[cfg.tema]||TEMAS.oscuro).dark?"#ffffff":"#2b241b"); t.font = Font.systemFont(12); }
+  w.url = FABLE_URL;                                         // tocar el widget abre Fable
   // Pedile a iOS que refresque seguido, así los cambios (sacar/agregar libros,
   // tapas, rotación) se ven rápido en vez de quedar pegados horas.
   w.refreshAfterDate = new Date(Date.now() + 10*60*1000);   // ~10 min
@@ -736,6 +788,20 @@ async function menu(){
         table.addRow(r);
       }
     }
+
+    r = new UITableRow(); r.height = 54;
+    c = r.addText(cfg.tema==="academia" ? "☕  Tema: dark academia (claro)" : "🌙  Tema: oscuro",
+      "Tocá para cambiar el look del estante");
+    c.titleFont = Font.semiboldSystemFont(16);
+    r.onSelect = () => { cfg.tema = (cfg.tema==="academia") ? "oscuro" : "academia"; guardarCfg(); construir(); table.reload(); };
+    table.addRow(r);
+
+    r = new UITableRow(); r.height = 54;
+    c = r.addText(cfg.destacarLeyendo ? "🔖  Destacar “leyendo ahora”: SÍ" : "🔖  Destacar “leyendo ahora”: no",
+      cfg.destacarLeyendo ? "Tu libro actual sale de frente con una cintita — se marca en el widget Leyendo ahora" : "Tocá para destacarlo en el estante");
+    c.titleFont = Font.semiboldSystemFont(16);
+    r.onSelect = () => { cfg.destacarLeyendo = !cfg.destacarLeyendo; guardarCfg(); construir(); table.reload(); };
+    table.addRow(r);
 
     if (cfg.grUrl) {
       r = new UITableRow(); r.isHeader = true; r.addText("Goodreads"); table.addRow(r);
