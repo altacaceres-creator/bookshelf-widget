@@ -277,8 +277,8 @@ const RENDER_JS = function(){
     ctx.fillStyle="#c47a4e";ctx.beginPath();ctx.moveTo(x+4,base-32);ctx.lineTo(x+28,base-32);ctx.lineTo(x+25,base-2);ctx.lineTo(x+7,base-2);ctx.closePath();ctx.fill();
     ctx.fillStyle="#d98a5c";ctx.fillRect(x+2,base-34,28,6);
   }
-  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK){
-    var SCALE=3,PAD=16,GAP=3,BANDGAP=12;
+  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK,SCALE){
+    SCALE=SCALE||3;var PAD=16,GAP=3,BANDGAP=12;
     return (async function(){
       for(var i=0;i<BOOKS.length;i++){BOOKS[i].im=await loadImg(BOOKS[i].img);}
       var cv=document.getElementById("c");cv.width=W*SCALE;cv.height=H*SCALE;
@@ -370,11 +370,13 @@ async function crearImagen(family){
     const b64 = await coverB64(l);
     books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, ley:!!l.ley, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
   }
+  // El grande usa escala 2 (más liviano, para que iOS lo refresque igual de rápido que el mediano)
+  const SCALE = (family === "large") ? 2 : 3;
   const wv = new WebView();
   await wv.loadHTML("<canvas id='c'></canvas>", null, new Size(CFG.W, CFG.H), false);
   const bootstrap = "(" + RENDER_JS.toString() + ")();";
   const call = "(function(){window.__run(" + JSON.stringify(books) + "," + CFG.W + "," + CFG.H + "," + CFG.shelves
-    + ",'" + T.repisa + "','" + T.card + "'," + (PLANTA?"true":"false") + "," + (T.dark?"true":"false") + ")"
+    + ",'" + T.repisa + "','" + T.card + "'," + (PLANTA?"true":"false") + "," + (T.dark?"true":"false") + "," + SCALE + ")"
     + ".then(function(d){completion(d);}).catch(function(e){completion('ERR:'+String(e));});})();";
   const out = await wv.evaluateJavaScript(bootstrap + call, true);
   if (typeof out !== "string" || out.indexOf("data:image") !== 0) return null;
