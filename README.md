@@ -25,6 +25,14 @@ A chic bookshelf on your iPhone home screen — real book spines and covers, no 
 
 The script ships with a small sample list; edit it from the menu.
 
+## ⬇️ Staying up to date
+
+The script can update itself from GitHub — no copy-pasting code again.
+
+- In the menu, tap **⬇️ Buscar actualización** ("Check for update"). If a newer version exists, it shows the new version and replaces the script with one tap. The menu also checks once a day and shows a green **🎉 ¡Hay una versión nueva!** banner when there's an update.
+- Updating **only changes the code**. Your book list, your custom covers, your "currently reading" book, and your Fable settings all live in separate files and are kept intact.
+- First time only: you need a version that already includes this button, so do one manual copy of the latest [`bookshelf.js`](bookshelf.js). After that, every future update is just the button.
+
 ## 🔄 Import from Goodreads
 
 In the menu, tap **Importar de Goodreads** and paste your shelf's **RSS** link:
