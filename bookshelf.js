@@ -39,6 +39,15 @@ const FABLE_USER_ID = "";
 const FABLE_LIST_ID = "";
 // ─────────────────────────────────────────────────────────────
 
+// ── AUTOACTUALIZACIÓN ─────────────────────────────────────────
+//   El script puede actualizarse solo desde GitHub. Cuando se sube
+//   una versión nueva, al abrir este script te avisa y lo reemplaza
+//   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
+//   en archivos aparte). Subí el número cada vez que cambie el código.
+const VERSION = 6;
+const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
+// ─────────────────────────────────────────────────────────────
+
 
 // =========== de acá para abajo no hace falta tocar ===========
 
@@ -66,10 +75,14 @@ guardar();
 
 // ── configuración de vista (fijo / rotar / por autor) ──
 const cfgPath = fm.joinPath(fm.documentsDirectory(), "biblio_config.json");
-let cfg = { rotar: ROTAR, modo: "todo", rotarCada: "dia", tema: "oscuro", destacarLeyendo: true, grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, covers: {}, coversSeeded: false };
+let cfg = { rotar: ROTAR, modo: "todo", rotarCada: "dia", tema: "oscuro", destacarLeyendo: true, grUrl: "", grAuto: false, grLast: 0, grSync: "merge", fbLast: 0, fbAuto: true, fbUser: "", fbList: "", updCheck: 0, updPend: 0, covers: {}, coversSeeded: false };
 try { if (fm.fileExists(cfgPath)) cfg = Object.assign(cfg, JSON.parse(fm.readString(cfgPath))); } catch(e) {}
 if (!cfg.covers) cfg.covers = {};
+// Fable: guardamos los IDs en la config (no en el código), así la autoactualización no los pisa
+if (!cfg.fbUser && FABLE_USER_ID) cfg.fbUser = FABLE_USER_ID;
+if (!cfg.fbList && FABLE_LIST_ID) cfg.fbList = FABLE_LIST_ID;
 function guardarCfg(){ try { fm.writeString(cfgPath, JSON.stringify(cfg)); } catch(e) {} }
+guardarCfg();
 
 // ── tapas elegidas a mano: se guardan aparte y se mantienen aunque sincronices ──
 function nslug(t){ return slug(String(t||"").replace(/\s*\([^)]*\)\s*$/,"")); }  // ignora "(Serie, #2)"
@@ -107,8 +120,8 @@ function capacidad(sel, family){
 
 // ── Fable: trae tu lista Finished (con las tapas de Fable) ──
 async function traerFable(){
-  if (!FABLE_USER_ID || !FABLE_LIST_ID) return null;
-  const url = "https://api.fable.co/api/v2/users/"+FABLE_USER_ID+"/book_lists/"+FABLE_LIST_ID+"/books?limit=100";
+  if (!cfg.fbUser || !cfg.fbList) return null;
+  const url = "https://api.fable.co/api/v2/users/"+cfg.fbUser+"/book_lists/"+cfg.fbList+"/books?limit=100";
   try {
     const req = new Request(url);
     req.timeoutInterval = 20;
@@ -141,7 +154,7 @@ function mergeFable(items){
   });
 }
 async function maybeSyncFable(){
-  if (!FABLE_USER_ID || !FABLE_LIST_ID || !cfg.fbAuto) return;
+  if (!cfg.fbUser || !cfg.fbList || !cfg.fbAuto) return;
   if (Date.now() - (cfg.fbLast||0) < 20*60*60*1000) return;   // ~1 vez al día
   const items = await traerFable();
   if (items && items.length) { libros = mergeFable(items); guardar(); }
@@ -711,9 +724,51 @@ async function refrescarTapas(){
   n.addAction("OK"); await n.presentAlert();
 }
 
+// ───────────── Autoactualización desde GitHub ─────────────
+async function versionRemota(){
+  if (!RAW_URL) return null;
+  try {
+    const code = await new Request(RAW_URL).loadString();
+    if (!code || !/window\.__run/.test(code)) return null;     // bajó algo raro, no un script válido
+    const m = code.match(/const\s+VERSION\s*=\s*(\d+)/);
+    return { v: m ? parseInt(m[1],10) : 0, code: code };
+  } catch(e){ return null; }
+}
+async function instalarActualizacion(code, v){
+  try {
+    fm.writeString(module.filename, code);                     // se reemplaza a sí mismo
+    cfg.updPend = 0; guardarCfg();
+    const n = new Alert(); n.title = "¡Listo! 🎉";
+    n.message = "Actualizado a la v"+v+".\nCerrá y volvé a abrir el script. El widget se redibuja solo (tu lista y tus tapas quedan intactas).";
+    n.addAction("OK"); await n.presentAlert(); return true;
+  } catch(e){
+    const n = new Alert(); n.title = "No pude guardar";
+    n.message = "Scriptable no pudo reemplazar el archivo:\n"+e; n.addAction("OK"); await n.presentAlert(); return false;
+  }
+}
+async function buscarActualizacion(){
+  const r = await versionRemota();
+  if (!r){ const n=new Alert(); n.title="No pude buscar"; n.message="Revisá tu conexión e intentá de nuevo."; n.addAction("OK"); await n.presentAlert(); return; }
+  if (r.v <= VERSION){ cfg.updPend = 0; guardarCfg(); const n=new Alert(); n.title="Ya estás al día ✨"; n.message="Tenés la última versión (v"+VERSION+")."; n.addAction("OK"); await n.presentAlert(); return; }
+  const a = new Alert();
+  a.title = "Nueva versión disponible";
+  a.message = "Hay una versión nueva (v"+r.v+", vos tenés v"+VERSION+").\n\nSe actualiza solo el código. Tu lista, tus tapas y tu libro actual no se tocan.";
+  a.addAction("Actualizar ahora"); a.addCancelAction("Ahora no");
+  if (await a.presentAlert() === 0) await instalarActualizacion(r.code, r.v);
+}
+// chequeo liviano 1 vez al día (al abrir el menú): deja una marca si hay versión nueva
+async function autoChequeoUpdate(){
+  if (!RAW_URL) return;
+  if (Date.now() - (cfg.updCheck||0) < 24*60*60*1000) return;
+  cfg.updCheck = Date.now(); guardarCfg();
+  const r = await versionRemota();
+  cfg.updPend = (r && r.v > VERSION) ? r.v : 0; guardarCfg();
+}
+
 async function menu(){
   const table = new UITable();
   table.showSeparators = true;
+  await autoChequeoUpdate();
   function construir(){
     table.removeAllRows();
     const capL = capacidad(ventana(libros,22),"large");
@@ -723,6 +778,14 @@ async function menu(){
     r.addText("📚 Mi biblioteca ("+libros.length+")",
       "Grande: "+(capL[0]||0)+" arriba · "+(capL[1]||0)+" abajo  |  Mediano: "+(capM[0]||0)+"  ·  "+estado);
     table.addRow(r);
+
+    if (cfg.updPend && cfg.updPend > VERSION){
+      r = new UITableRow(); r.height = 54;
+      let cu = r.addText("🎉  ¡Hay una versión nueva! (v"+cfg.updPend+")", "Tocá para actualizar — no pierdes tu lista ni tus tapas");
+      cu.titleColor = Color.green(); cu.titleFont = Font.boldSystemFont(16);
+      r.onSelect = async () => { await buscarActualizacion(); construir(); table.reload(); };
+      table.addRow(r);
+    }
 
     r = new UITableRow(); r.height = 50;
     let c = r.addText("➕  Agregar libro"); c.titleFont = Font.semiboldSystemFont(16);
@@ -749,7 +812,13 @@ async function menu(){
     r.onSelect = () => { mezclar(); construir(); table.reload(); };
     table.addRow(r);
 
-    if (FABLE_USER_ID && FABLE_LIST_ID){
+    r = new UITableRow(); r.height = 50;
+    c = r.addText("⬇️  Buscar actualización", "Trae la última versión del código desde GitHub");
+    c.titleFont = Font.semiboldSystemFont(16);
+    r.onSelect = async () => { await buscarActualizacion(); construir(); table.reload(); };
+    table.addRow(r);
+
+    if (cfg.fbUser && cfg.fbList){
       r = new UITableRow(); r.height = 50;
       c = r.addText("📘  Sincronizar con Fable ahora"); c.titleFont = Font.semiboldSystemFont(16);
       r.onSelect = async () => {
