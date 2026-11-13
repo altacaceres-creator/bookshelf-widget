@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 6;
+const VERSION = 7;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -419,12 +419,24 @@ async function crearImagen(family){
   return Image.fromData(Data.fromBase64String(out.split(",")[1]));
 }
 
+// Deja las tapas descargadas y cacheadas (se corre al abrir la app, que tiene
+// más tiempo), para que el widget después solo las lea y dibuje sin "timeout".
+async function precargarTapas(){
+  try {
+    const base = aplicarTapas(libros);
+    const act = cfg.destacarLeyendo ? leerLibroActual() : null;
+    const sel = ventana(base, 22);
+    const todo = act ? [{ titulo: act.titulo, autor: act.autor||"", cover: act.cover }].concat(sel) : sel;
+    for (const l of todo){ try { await coverB64(l); } catch(e){} }
+  } catch(e){}
+}
+
 async function crearWidget(){
   const family = config.widgetFamily || "medium";
   const fam = (family === "small") ? "medium" : family;
-  await maybeSyncFable();                      // se actualiza solo desde Fable (si está configurado)
-  await maybeSyncGoodreads();                 // se actualiza solo desde Goodreads (si está activado)
-  const img = await crearImagen(fam);
+  // El widget SOLO dibuja (rápido, desde lo ya guardado). La sincronización
+  // con internet pasa al abrir la app, no acá: así el widget no da "timeout".
+  let img = null; try { img = await crearImagen(fam); } catch(e){}
   const w = new ListWidget();
   w.setPadding(0,0,0,0);
   w.backgroundColor = new Color((TEMAS[cfg.tema]||TEMAS.oscuro).card);
@@ -936,6 +948,9 @@ if (config.runsInWidget) {
   Script.setWidget(widget);
   Script.complete();
 } else {
-  await menu();              // tocado dentro de Scriptable → menú para editar
+  await maybeSyncFable();      // la sincronización con internet pasa acá (la app tiene más tiempo que el widget)
+  await maybeSyncGoodreads();
+  await precargarTapas();      // deja las tapas cacheadas para que el widget solo dibuje
+  await menu();                // tocado dentro de Scriptable → menú para editar
   Script.complete();
 }
