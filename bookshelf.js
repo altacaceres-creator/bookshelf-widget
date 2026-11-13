@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 9;
+const VERSION = 10;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -318,9 +318,10 @@ const RENDER_JS = function(){
   window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK,SCALE){
     SCALE=SCALE||3;var PAD=16,GAP=3,BANDGAP=12;
     return (async function(){
-      for(var i=0;i<BOOKS.length;i++){BOOKS[i].im=await loadImg(BOOKS[i].img);}
+      await Promise.all(BOOKS.map(function(b){return loadImg(b.img).then(function(im){b.im=im;});}));  // en paralelo (mucho más rápido que de a una)
       var cv=document.getElementById("c");cv.width=W*SCALE;cv.height=H*SCALE;
       var ctx=cv.getContext("2d");ctx.scale(SCALE,SCALE);
+      ctx.fillStyle=CARD;ctx.fillRect(0,0,W,H);  // relleno total (sin transparencia) para poder exportar en JPEG liviano
       rr(ctx,0,0,W,H,16);ctx.fillStyle=CARD;ctx.fill();ctx.save();rr(ctx,0,0,W,H,16);ctx.clip();
       var sombraFondo = DARK ? 0.20 : 0.10;
       var bgg=ctx.createLinearGradient(0,0,0,H);bgg.addColorStop(0,"rgba(255,255,255,0.05)");bgg.addColorStop(0.55,"rgba(0,0,0,0)");bgg.addColorStop(1,"rgba(0,0,0,"+sombraFondo+")");ctx.fillStyle=bgg;ctx.fillRect(0,0,W,H);
@@ -352,7 +353,7 @@ const RENDER_JS = function(){
       vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,"+(DARK?0.22:0.10)+")");
       ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
       ctx.restore();
-      return cv.toDataURL("image/png");
+      return cv.toDataURL("image/jpeg",0.92);  // JPEG: codifica más rápido y pesa menos que PNG
     })();
   };
 };
@@ -390,7 +391,7 @@ function leerLibroActual(){
 }
 
 async function crearImagen(family, soloCache){
-  const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:22} }[family]||{W:360,H:170,shelves:1,max:11};
+  const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:18} }[family]||{W:360,H:170,shelves:1,max:11};
   const T = TEMAS[cfg.tema] || TEMAS.oscuro;
 
   let base = aplicarTapas(libros);
