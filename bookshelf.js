@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 10;
+const VERSION = 11;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -391,7 +391,7 @@ function leerLibroActual(){
 }
 
 async function crearImagen(family, soloCache){
-  const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:18} }[family]||{W:360,H:170,shelves:1,max:11};
+  const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:12} }[family]||{W:360,H:170,shelves:1,max:11};
   const T = TEMAS[cfg.tema] || TEMAS.oscuro;
 
   let base = aplicarTapas(libros);
