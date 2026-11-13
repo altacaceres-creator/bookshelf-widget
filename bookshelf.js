@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 8;
+const VERSION = 9;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -124,7 +124,7 @@ async function traerFable(){
   const url = "https://api.fable.co/api/v2/users/"+cfg.fbUser+"/book_lists/"+cfg.fbList+"/books?limit=100";
   try {
     const req = new Request(url);
-    req.timeoutInterval = 20;
+    req.timeoutInterval = 10;
     req.headers = { "User-Agent":"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15" };
     const j = await req.loadJSON();
     const arr = j.results || [];
@@ -184,13 +184,15 @@ async function coverURL(l){
   return null;
 }
 
-async function coverB64(l){
+async function coverB64(l, soloCache){
   const ruta = fm.joinPath(cacheDir, slug(l.titulo) + ".jpg");
   if (fm.fileExists(ruta)) { const d = fm.read(ruta); if (d) return d.toBase64String(); }
+  if (soloCache) return null;                    // en el widget NO bajamos nada: solo lo ya guardado (por eso el grande no da timeout)
   const u = l.cover || await coverURL(l);
   if (!u) return null;
   try {
-    const data = await new Request(u).load();
+    const req = new Request(u); req.timeoutInterval = 10;
+    const data = await req.load();
     if (data) { try { fm.write(ruta, data); } catch(e){} return data.toBase64String(); }
   } catch(e){}
   return null;
@@ -387,7 +389,7 @@ function leerLibroActual(){
   return null;
 }
 
-async function crearImagen(family){
+async function crearImagen(family, soloCache){
   const CFG = { medium:{W:360,H:170,shelves:1,max:11}, large:{W:360,H:360,shelves:2,max:22} }[family]||{W:360,H:170,shelves:1,max:11};
   const T = TEMAS[cfg.tema] || TEMAS.oscuro;
 
@@ -403,7 +405,7 @@ async function crearImagen(family){
 
   const books = [];
   for (const l of sel){
-    const b64 = await coverB64(l);
+    const b64 = await coverB64(l, soloCache);
     books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, ley:!!l.ley, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
   }
   // El grande usa escala 2 (más liviano, para que iOS lo refresque igual de rápido que el mediano)
@@ -434,9 +436,12 @@ async function precargarTapas(){
 async function crearWidget(){
   const family = config.widgetFamily || "medium";
   const fam = (family === "small") ? "medium" : family;
-  // El widget SOLO dibuja (rápido, desde lo ya guardado). La sincronización
-  // con internet pasa al abrir la app, no acá: así el widget no da "timeout".
-  let img = null; try { img = await crearImagen(fam); } catch(e){}
+  // Sincroniza la LISTA de Fable (1 pedido liviano, máx 1 vez al día). No baja tapas acá.
+  try { await maybeSyncFable(); } catch(e){}
+  // Dibuja SOLO desde lo ya guardado (nada de bajar tapas al dibujar): por eso el grande
+  // no da "timeout". Un libro nuevo sin tapa guardada se ve con su tarjetita de título
+  // hasta que abras la app (ahí se baja su portada real).
+  let img = null; try { img = await crearImagen(fam, true); } catch(e){}
   const w = new ListWidget();
   w.setPadding(0,0,0,0);
   w.backgroundColor = new Color((TEMAS[cfg.tema]||TEMAS.oscuro).card);
