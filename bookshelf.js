@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 7;
+const VERSION = 8;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -947,10 +947,17 @@ if (config.runsInWidget) {
   const widget = await crearWidget();
   Script.setWidget(widget);
   Script.complete();
-} else {
-  await maybeSyncFable();      // la sincronización con internet pasa acá (la app tiene más tiempo que el widget)
+} else if (config.runsInApp) {
+  // abierto dentro de Scriptable → sincroniza y abre el menú
+  await maybeSyncFable();       // la sincronización con internet pasa acá (hay más tiempo que en el widget)
   await maybeSyncGoodreads();
-  await precargarTapas();      // deja las tapas cacheadas para que el widget solo dibuje
-  await menu();                // tocado dentro de Scriptable → menú para editar
+  await precargarTapas();       // deja las tapas cacheadas para que el widget solo dibuje
+  await menu();                 // menú para editar
+  Script.complete();
+} else {
+  // corrido en segundo plano (Atajo/automatización de iOS) → SOLO sincroniza, sin menú
+  await maybeSyncFable();
+  await maybeSyncGoodreads();
+  await precargarTapas();
   Script.complete();
 }
