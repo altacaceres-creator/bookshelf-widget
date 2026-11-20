@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 11;
+const VERSION = 12;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -56,6 +56,7 @@ const cacheDir = fm.joinPath(fm.cacheDirectory(), "bookshelf_lomos5");
 if (!fm.fileExists(cacheDir)) fm.createDirectory(cacheDir);
 const listaPath = fm.joinPath(fm.documentsDirectory(), "mi_biblioteca.json");
 const libroActualPath = fm.joinPath(fm.documentsDirectory(), "libro_actual.json"); // compartido con "Leyendo ahora"
+const libroActualCoverPath = fm.joinPath(fm.documentsDirectory(), "libro_actual_cover.jpg"); // portada del "leyendo ahora", la guarda el otro widget
 function slug(s){return s.toLowerCase().replace(/[^a-z0-9]/gi,"_").slice(0,60);}
 
 // Temas del estante
@@ -406,7 +407,13 @@ async function crearImagen(family, soloCache){
 
   const books = [];
   for (const l of sel){
-    const b64 = await coverB64(l, soloCache);
+    let b64 = null;
+    // El libro destacado (tu "leyendo ahora") usa la portada que guardó el widget
+    // "Leyendo ahora" en un archivo compartido — así sale su tapa real, no la tarjetita.
+    if (l.ley && fm.fileExists(libroActualCoverPath)) {
+      try { const d = fm.read(libroActualCoverPath); if (d) b64 = d.toBase64String(); } catch(e){}
+    }
+    if (!b64) b64 = await coverB64(l, soloCache);
     books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, ley:!!l.ley, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
   }
   // El grande usa escala 2 (más liviano, para que iOS lo refresque igual de rápido que el mediano)
