@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 13;
+const VERSION = 14;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -848,7 +848,7 @@ async function menu(){
     const capM = capacidad(ventana(libros,11),"medium");
     const estado = cfg.rotar ? (cfg.modo==="autor" ? "rotando por autor" : "rotando") : "fijo";
     let r = new UITableRow(); r.isHeader = true;
-    r.addText("📚 Mi biblioteca ("+libros.length+")",
+    r.addText("📚 Mi biblioteca ("+libros.length+")  ·  v"+VERSION,
       "Grande: "+(capL[0]||0)+" arriba · "+(capL[1]||0)+" abajo  |  Mediano: "+(capM[0]||0)+"  ·  "+estado);
     table.addRow(r);
 
