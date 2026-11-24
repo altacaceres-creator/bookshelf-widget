@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 14;
+const VERSION = 15;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -316,14 +316,14 @@ const RENDER_JS = function(){
     ctx.fillStyle="#c47a4e";ctx.beginPath();ctx.moveTo(x+4,base-32);ctx.lineTo(x+28,base-32);ctx.lineTo(x+25,base-2);ctx.lineTo(x+7,base-2);ctx.closePath();ctx.fill();
     ctx.fillStyle="#d98a5c";ctx.fillRect(x+2,base-34,28,6);
   }
-  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK,SCALE){
+  window.__run=function(BOOKS,W,H,SHELVES,WOOD,CARD,PLANTA,DARK,SCALE,PLANO){
     SCALE=SCALE||3;var PAD=16,GAP=3,BANDGAP=12;
     return (async function(){
       await Promise.all(BOOKS.map(function(b){return loadImg(b.img).then(function(im){b.im=im;});}));  // en paralelo (mucho más rápido que de a una)
       var cv=document.getElementById("c");cv.width=W*SCALE;cv.height=H*SCALE;
       var ctx=cv.getContext("2d");ctx.scale(SCALE,SCALE);
       ctx.fillStyle=CARD;ctx.fillRect(0,0,W,H);  // relleno total (sin transparencia) para poder exportar en JPEG liviano
-      rr(ctx,0,0,W,H,16);ctx.fillStyle=CARD;ctx.fill();ctx.save();rr(ctx,0,0,W,H,16);ctx.clip();
+      ctx.save(); if(!PLANO){rr(ctx,0,0,W,H,16);ctx.clip();}  // PLANO = tira para pegar (sin esquinas redondeadas)
       var sombraFondo = DARK ? 0.20 : 0.10;
       var bgg=ctx.createLinearGradient(0,0,0,H);bgg.addColorStop(0,"rgba(255,255,255,0.05)");bgg.addColorStop(0.55,"rgba(0,0,0,0)");bgg.addColorStop(1,"rgba(0,0,0,"+sombraFondo+")");ctx.fillStyle=bgg;ctx.fillRect(0,0,W,H);
       var usableW=W-PAD*2;var bandH=Math.round((H-PAD*2-BANDGAP*(SHELVES-1))/SHELVES);
@@ -350,9 +350,11 @@ const RENDER_JS = function(){
           if(o.plant)plant(ctx,cx,base);else if(o.face)face(ctx,o,cx,base);else spine(ctx,o,cx,base);
           cx+=o.w+GAP;}
       }
-      var vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.62);
-      vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,"+(DARK?0.22:0.10)+")");
-      ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+      if(!PLANO){
+        var vg=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.3,W/2,H/2,Math.max(W,H)*0.62);
+        vg.addColorStop(0,"rgba(0,0,0,0)");vg.addColorStop(1,"rgba(0,0,0,"+(DARK?0.22:0.10)+")");
+        ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+      }
       ctx.restore();
       return cv.toDataURL("image/jpeg",0.92);  // JPEG: codifica más rápido y pesa menos que PNG
     })();
@@ -416,13 +418,34 @@ async function crearImagen(family, soloCache){
     if (!b64) b64 = await coverB64(l, soloCache);
     books.push({ t:l.titulo, a:l.autor||"", face:!!l.face, ley:!!l.ley, img: b64 ? ("data:image/jpeg;base64,"+b64) : null });
   }
-  // El grande usa escala 2 (más liviano, para que iOS lo refresque igual de rápido que el mediano)
-  const SCALE = (family === "large") ? 2 : 3;
+  if (family === "large") {
+    // GRANDE: dibujamos cada estante por separado (liviano, como el mediano que nunca falla)
+    // y los pegamos con DrawContext. Así el widget grande no supera la memoria ni queda en blanco.
+    const mitad = Math.ceil(books.length/2);
+    const arriba = books.slice(0, mitad);
+    const abajo  = books.slice(mitad);
+    const imgArriba = await renderWeb(arriba, 360, 180, 1, 2, true, false);   // tira de arriba (sin planta)
+    const imgAbajo  = await renderWeb(abajo,  360, 180, 1, 2, true, PLANTA);  // tira de abajo (con la plantita)
+    if (!imgArriba && !imgAbajo) return null;
+    const dc = new DrawContext();
+    dc.size = new Size(720, 720); dc.opaque = true; dc.respectScreenScale = false;
+    dc.setFillColor(new Color(T.card)); dc.fillRect(new Rect(0,0,720,720));
+    if (imgArriba) dc.drawImageInRect(imgArriba, new Rect(0,0,720,360));
+    if (imgAbajo)  dc.drawImageInRect(imgAbajo,  new Rect(0,360,720,360));
+    return dc.getImage();
+  }
+  // MEDIANO (y demás): un solo dibujo, como siempre
+  return await renderWeb(books, CFG.W, CFG.H, CFG.shelves, 3, false, PLANTA);
+}
+
+// Dibuja UN estante con el motor del WebView y devuelve la imagen (o null).
+async function renderWeb(books, W, H, shelves, scale, plano, planta){
+  const T = TEMAS[cfg.tema] || TEMAS.oscuro;
   const wv = new WebView();
-  await wv.loadHTML("<canvas id='c'></canvas>", null, new Size(CFG.W, CFG.H), false);
+  await wv.loadHTML("<canvas id='c'></canvas>", null, new Size(W, H), false);
   const bootstrap = "(" + RENDER_JS.toString() + ")();";
-  const call = "(function(){window.__run(" + JSON.stringify(books) + "," + CFG.W + "," + CFG.H + "," + CFG.shelves
-    + ",'" + T.repisa + "','" + T.card + "'," + (PLANTA?"true":"false") + "," + (T.dark?"true":"false") + "," + SCALE + ")"
+  const call = "(function(){window.__run(" + JSON.stringify(books) + "," + W + "," + H + "," + shelves
+    + ",'" + T.repisa + "','" + T.card + "'," + (planta?"true":"false") + "," + (T.dark?"true":"false") + "," + scale + "," + (plano?"true":"false") + ")"
     + ".then(function(d){completion(d);}).catch(function(e){completion('ERR:'+String(e));});})();";
   const out = await wv.evaluateJavaScript(bootstrap + call, true);
   if (typeof out !== "string" || out.indexOf("data:image") !== 0) return null;
