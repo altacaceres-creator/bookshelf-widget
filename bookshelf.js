@@ -44,7 +44,7 @@ const FABLE_LIST_ID = "";
 //   una versión nueva, al abrir este script te avisa y lo reemplaza
 //   (sin tocar tu lista, tus tapas ni tu libro actual, que viven
 //   en archivos aparte). Subí el número cada vez que cambie el código.
-const VERSION = 12;
+const VERSION = 13;
 const RAW_URL = "https://raw.githubusercontent.com/altacaceres-creator/bookshelf-widget/main/bookshelf.js";
 // ─────────────────────────────────────────────────────────────
 
@@ -676,11 +676,59 @@ function borrarCacheDe(l){ try { const p = fm.joinPath(cacheDir, slug(l.titulo) 
 async function pegarURLTapa(l){
   const a = new Alert();
   a.title = "Pegar URL de tapa";
-  a.message = "Pegá el link de una imagen (.jpg) de la tapa que quieras.";
+  a.message = "Pegá el link de una IMAGEN de la tapa (que termine en .jpg o .png). Te la muestro antes de guardar para que veas que quedó bien.";
   a.addTextField("https://…", l.cover || "");
-  a.addAction("Guardar"); a.addCancelAction("Cancelar");
+  a.addAction("Ver y guardar");   // 0
+  a.addCancelAction("Cancelar");
   const r = await a.presentAlert();
-  if (r === 0) { const u = (a.textFieldValue(0)||"").trim(); if (u) { l.cover = u; fijarTapa(l); borrarCacheDe(l); guardar(); } }
+  if (r !== 0) return;
+  const u = (a.textFieldValue(0)||"").trim();
+  if (!u) return;
+
+  // Descargar y validar la imagen (acá hay tiempo, estamos en la app)
+  let data = null, img = null, err = "";
+  try {
+    const req = new Request(u);
+    req.timeoutInterval = 20;
+    data = await req.load();
+    if (data) img = Image.fromData(data);
+  } catch(e){ err = String(e); }
+
+  // ¿Es una imagen válida?
+  if (!img || !img.size || img.size.width < 8 || img.size.height < 8) {
+    const n = new Alert();
+    n.title = "❌ Ese link no cargó";
+    n.message = "No pude obtener una imagen de ese link.\n\nTips:\n• Tiene que ser el link de la IMAGEN (si lo abrís en el navegador se ve SOLO la tapa), no de una página.\n• Suele terminar en .jpg o .png\n• Si copiaste desde Google, probá \"Copiar dirección de la imagen\".\n\n" + (err ? ("Detalle técnico: " + err) : "El link no devolvió una imagen.");
+    n.addAction("Entendido");
+    await n.presentAlert();
+    return;   // no tocamos la tapa actual
+  }
+
+  // Previsualizar cómo quedó
+  await QuickLook.present(img);
+
+  // Confirmar guardar (por si no le gustó)
+  const c = new Alert();
+  c.title = "¿Usar esta tapa?";
+  c.message = "Para \"" + l.titulo + "\" (" + Math.round(img.size.width) + "×" + Math.round(img.size.height) + " px).";
+  c.addAction("✅ Guardar");        // 0
+  c.addAction("↩︎ Probar otro link"); // 1
+  c.addCancelAction("Cancelar");    // -1
+  const rc = await c.presentSheet();
+  if (rc === 1) { await pegarURLTapa(l); return; }
+  if (rc !== 0) return;
+
+  // Guardar: fijar la URL y dejar la imagen ya cacheada (para que el widget la lea al toque)
+  l.cover = u;
+  fijarTapa(l);
+  try { fm.write(fm.joinPath(cacheDir, slug(l.titulo) + ".jpg"), data); } catch(e){}
+  guardar();
+
+  const ok = new Alert();
+  ok.title = "✅ Tapa guardada";
+  ok.message = "Listo. Ya quedó para \"" + l.titulo + "\".\nEn el estante se ve enseguida (el widget puede tardar unos minutos en refrescarse solo).";
+  ok.addAction("OK");
+  await ok.presentAlert();
 }
 
 async function elegirEdicion(l){
